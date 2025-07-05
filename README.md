@@ -34,6 +34,8 @@ A modern, responsive web interface for interacting with Ollama models. This web 
 - **⚡ Performance**: Optimized for fast loading and smooth interactions
 - **🎯 Accessibility**: Keyboard shortcuts and screen reader friendly
 - **🌅 Clean Startup**: Always starts with welcome message, chat history accessible only via History panel
+- 
+![Screenshot 2025-07-06 at 7 19 35 AM](https://github.com/user-attachments/assets/c277de37-578a-48ae-8bf1-8dbb1c56f74b)
 
 ## 📋 Requirements
 - **Modern Web Browser**: Chrome 80+, Firefox 75+, Safari 13+, or Edge 80+

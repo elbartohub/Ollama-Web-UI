@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ollama Web UI</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+    <!-- Chat storage module -->
+    <script src="chat-storage.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-robot"></i> Ollama Web UI</h1>
+                <div class="header-buttons">
+                    <button class="new-chat-btn" onclick="startNewChat()" title="Start a new chat">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button class="history-btn" onclick="toggleHistory()" title="Chat history">
+                        <i class="fas fa-history"></i>
+                    </button>
+                    <button class="header-save-btn" onclick="saveChatToRTF()" title="Save conversation to RTF">
+                        <i class="fas fa-download"></i>
+                    </button>
+                    <button class="settings-btn" onclick="toggleSettings()">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Settings Panel -->
+        <div class="settings-panel" id="settingsPanel">
+            <div class="settings-content">
+                <h3><i class="fas fa-server"></i> Server Settings</h3>
+                <div class="form-group">
+                    <label for="serverIp">Ollama Server IP:</label>
+                    <input type="text" id="serverIp" placeholder="http://192.168.68.30:11434" value="http://192.168.68.30:11434">
+                </div>
+                <div class="form-group">
+                    <label for="modelSelect">Select Model:</label>
+                    <select id="modelSelect">
+                        <option value="">Loading models...</option>
+                    </select>
+                    <button class="refresh-btn" onclick="loadModels()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                
+                <h3><i class="fas fa-brain"></i> AI Behavior</h3>
+                <div class="form-group">
+                    <label for="systemPrompt">System Prompt:</label>
+                    <textarea id="systemPrompt" placeholder="You are a helpful AI assistant. Be concise and accurate in your responses." rows="4"></textarea>
+                    <small class="form-help">This prompt will be sent with every conversation to set the AI's behavior and personality. Leave empty to use model defaults.</small>
+                </div>
+                
+                <h3><i class="fas fa-file-code"></i> Configuration Management</h3>
+                <div class="config-buttons">
+                    <button class="config-btn save-config-btn" onclick="saveConfiguration()" title="Save current configuration to file">
+                        <i class="fas fa-save"></i> Save Config
+                    </button>
+                    <button class="config-btn load-config-btn" onclick="loadConfiguration()" title="Load configuration from file">
+                        <i class="fas fa-folder-open"></i> Load Config
+                    </button>
+                    <button class="config-btn export-config-btn" onclick="exportConfiguration()" title="Export configuration as downloadable file">
+                        <i class="fas fa-download"></i> Export Config
+                    </button>
+                    <button class="config-btn import-config-btn" onclick="importConfiguration()" title="Import configuration from file">
+                        <i class="fas fa-upload"></i> Import Config
+                    </button>
+                </div>
+                <input type="file" id="configFileInput" accept=".json" style="display: none;" onchange="handleConfigFileImport(event)">
+                <small class="form-help">Save your settings (Server IP, Model, System Prompt) to a file in the project folder for backup or sharing.</small>
+                
+                <h3><i class="fas fa-database"></i> Local Storage</h3>
+                <div class="storage-info" id="storageInfo">
+                    <div class="storage-stats">
+                        <span>No chat history saved</span>
+                    </div>
+                </div>
+                <div class="config-buttons">
+                    <button class="config-btn" onclick="exportChatHistory()" title="Export chat history to file">
+                        <i class="fas fa-file-export"></i> Export History
+                    </button>
+                    <button class="config-btn" onclick="importChatHistory()" title="Import chat history from file">
+                        <i class="fas fa-file-import"></i> Import History
+                    </button>
+                    <button class="config-btn" onclick="clearChatHistory()" title="Clear all saved chat history">
+                        <i class="fas fa-trash"></i> Clear History
+                    </button>
+                    <button class="config-btn" onclick="updateStorageInfo()" title="Refresh storage information">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <small class="form-help">Chat history is automatically saved to your browser's local storage and restored when you reload the page.</small>
+                
+                <div class="connection-status" id="connectionStatus">
+                    <i class="fas fa-circle"></i> Not connected
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat History Panel -->
+        <div class="history-panel" id="historyPanel">
+            <div class="history-content">
+                <div class="history-header">
+                    <h3><i class="fas fa-history"></i> Chat History</h3>
+                    <div class="history-actions">
+                        <button class="save-session-btn" onclick="saveCurrentSession()" title="Save current chat">
+                            <i class="fas fa-save"></i>
+                        </button>
+                        <button class="export-sessions-btn" onclick="exportAllSessions()" title="Export all sessions to file">
+                            <i class="fas fa-file-export"></i>
+                        </button>
+                        <button class="import-sessions-btn" onclick="importSessions()" title="Import sessions from file">
+                            <i class="fas fa-file-import"></i>
+                        </button>
+                        <button class="clear-history-btn" onclick="clearAllHistory()" title="Clear all history">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="current-session-info" id="currentSessionInfo">
+                    <span class="session-status">No active session</span>
+                </div>
+                <div class="sessions-list" id="sessionsList">
+                    <div class="empty-history">
+                        <i class="fas fa-folder-open"></i>
+                        <p>No saved chats yet</p>
+                        <small>Start a conversation and save it to see your chat history</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="main-content">
+            <div class="chat-container" id="chatContainer">
+                <div class="welcome-message">
+                    <i class="fas fa-comments"></i>
+                    <h2>Welcome to Ollama Web UI</h2>
+                    <p>Configure your server settings and select a model to start chatting</p>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="input-area">
+                <div class="file-upload-area" id="fileUploadArea">
+                    <input type="file" id="fileInput" multiple accept="image/*,.txt,.pdf,.doc,.docx,.md">
+                    <div class="upload-preview" id="uploadPreview"></div>
+                </div>
+                
+                <div class="input-container">
+                    <button class="attach-btn" onclick="document.getElementById('fileInput').click()">
+                        <i class="fas fa-paperclip"></i>
+                    </button>
+                    <textarea id="messageInput" placeholder="Type your message here..." rows="1"></textarea>
+                    <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Processing...</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

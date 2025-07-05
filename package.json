@@ -1,0 +1,17 @@
+{
+  "name": "webai",
+  "version": "1.0.0",
+  "description": "A modern, responsive web interface for interacting with Ollama models. This web UI provides a clean chat interface with support for file uploads, streaming responses, multimodal capabilities, and conversation export functionality.",
+  "main": "script.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0"
+  }
+}

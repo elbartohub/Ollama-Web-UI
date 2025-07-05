@@ -1,6 +1,7 @@
 # Ollama Web UI
 
 A modern, responsive web interface for interacting with Ollama models. This web UI provides a clean chat interface with robust session management, localStorage persistence, RTF export functionality, and comprehensive code formatting capabilities.
+
 ![Screenshot 2025-07-06 at 7 20 02 AM](https://github.com/user-attachments/assets/ac0d8a3a-50e0-4272-910a-3aac3e281fed)
 
 ## 🚀 Features
@@ -34,8 +35,9 @@ A modern, responsive web interface for interacting with Ollama models. This web 
 - **⚡ Performance**: Optimized for fast loading and smooth interactions
 - **🎯 Accessibility**: Keyboard shortcuts and screen reader friendly
 - **🌅 Clean Startup**: Always starts with welcome message, chat history accessible only via History panel
-- 
+
 ![Screenshot 2025-07-06 at 7 19 35 AM](https://github.com/user-attachments/assets/c277de37-578a-48ae-8bf1-8dbb1c56f74b)
+![Screenshot 2025-07-06 at 7 23 43 AM](https://github.com/user-attachments/assets/cc81847f-d815-4490-b1cc-c03eb559df91)
 
 ## 📋 Requirements
 - **Modern Web Browser**: Chrome 80+, Firefox 75+, Safari 13+, or Edge 80+

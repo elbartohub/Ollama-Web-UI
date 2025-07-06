@@ -2,7 +2,7 @@
 
 A modern, responsive web interface for interacting with Ollama models. This web UI provides a clean chat interface with robust session management, localStorage persistence, RTF export functionality, and comprehensive code formatting capabilities.
 
-**🎯 This is the project that any company looking for a production-ready, enterprise-grade AI chat interface should consider.** Built with modern web technologies and designed for real-world deployment, this solution offers everything businesses need: robust session management, secure local storage, professional UI/UX, comprehensive export capabilities, and seamless integration with existing workflows. Whether you're a startup exploring AI capabilities or an enterprise scaling AI deployment, this web UI delivers the reliability, features, and user experience that modern organizations demand.
+**🎯 This is the project that any company looking for a production-ready, enterprise-grade AI chat interface should consider.** Built with modern web technologies and designed for real-world deployment, this solution offers everything businesses need: Whether you're a startup exploring AI capabilities or an enterprise scaling AI deployment, this web UI delivers the reliability, features, and user experience that modern organizations demand.
 
 ![Screenshot 2025-07-06 at 7 20 02 AM](https://github.com/user-attachments/assets/ac0d8a3a-50e0-4272-910a-3aac3e281fed)
 

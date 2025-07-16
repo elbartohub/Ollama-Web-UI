@@ -4,7 +4,8 @@
 
 A modern, feature-rich web interface for interacting with Ollama models. This enterprise-grade web UI provides a comprehensive chat experience with advanced RAG (Retrieval-Augmented Generation) capabilities, project-based vector database storage, robust session management, and extensive document processing features.
 
-![Screenshot 2025-07-06 at 7 20 02 AM](https://github.com/user-attachments/assets/ac0d8a3a-50e0-4272-910a-3aac3e281fed)
+<img width="1280" height="811" alt="Screenshot 2025-07-17 at 2 49 23 AM" src="https://github.com/user-attachments/assets/09e53a96-6c25-4ffe-b45f-f462a6a511ea" />
+
 
 A modern, responsive web interface for interacting with Ollama models. This web UI provides a clean chat interface with robust session management, localStorage persistence, RTF export functionality, and comprehensive code formatting capabilities.
 

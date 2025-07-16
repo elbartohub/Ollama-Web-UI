@@ -27,6 +27,9 @@ A modern, responsive web interface for interacting with Ollama models. This web 
 - **� Real-time Processing**: Live progress indicators and document processing status
 - **🗂️ Document Management**: View, preview, and manage uploaded documents with detailed statistics
 
+<img width="736" height="1092" alt="Screenshot 2025-07-17 at 2 44 15 AM" src="https://github.com/user-attachments/assets/24a06c10-5abd-4209-985e-cfaa4f6b9022" />
+
+
 ### Core Chat Functionality
 - **🔧 Flexible Server Configuration**: Easy setup with custom Ollama server IP addresses
 - **🤖 Dynamic Model Selection**: Auto-detection and selection from available Ollama models

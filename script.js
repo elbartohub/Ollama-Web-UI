@@ -188,7 +188,7 @@ function ensureWelcomeMessage() {
     welcomeMessage.className = 'welcome-message';
     welcomeMessage.innerHTML = `
         <i class="fas fa-comments"></i>
-        <h2>Welcome to Ollama Web UI</h2>
+        <h2>Welcome to Ollama Web UI + RAG</h2>
         <p>Configure your server settings and select a model to start chatting</p>
         <p>Access your previous conversations through the History panel</p>
     `;

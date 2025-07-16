@@ -12,7 +12,8 @@ A modern, responsive web interface for interacting with Ollama models. This web 
 
 **🎯 This project is a valuable resource for companies seeking a production-ready, enterprise-grade AI chat interface.** Built with modern web technologies and designed for real-world deployment, this solution offers everything businesses need: Whether you're a startup exploring AI capabilities or an enterprise scaling AI deployment, this web UI delivers the reliability, features, and user experience that modern organizations demand.
 
-![Screenshot 2025-07-06 at 7 20 02 AM](https://github.com/user-attachments/assets/ac0d8a3a-50e0-4272-910a-3aac3e281fed)
+<img width="1190" height="761" alt="image" src="https://github.com/user-attachments/assets/80bb39df-7ebd-41d9-ba15-33db970f3b4d" />
+
 
 ## 🚀 Features
 

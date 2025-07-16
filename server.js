@@ -11,7 +11,7 @@ const CONFIG_FILE = path.join(SESSIONS_DIR, 'config.json');
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static('.'));
 
 // Ensure sessions directory and files exist and are valid
@@ -357,6 +357,142 @@ app.post('/api/config/import', async (req, res) => {
     } catch (error) {
         console.error('Error importing config:', error);
         res.status(500).json({ error: 'Failed to import configuration' });
+    }
+});
+
+// Vector Storage API endpoints
+const VECTOR_STORAGE_DIR = path.join(__dirname, 'vector_storage');
+
+// Ensure vector storage directory exists
+async function ensureVectorStorageDir() {
+    try {
+        await fs.access(VECTOR_STORAGE_DIR);
+    } catch {
+        await fs.mkdir(VECTOR_STORAGE_DIR, { recursive: true });
+        console.log('📁 Created vector_storage directory');
+    }
+}
+
+// Save vector database to project folder
+app.post('/api/vector-storage/save', async (req, res) => {
+    try {
+        await ensureVectorStorageDir();
+
+        const { filename, data } = req.body;
+
+        if (!filename || !data) {
+            return res.status(400).json({ error: 'filename and data are required' });
+        }
+
+        // Ensure filename has .json extension
+        const safeFilename = filename.endsWith('.json') ? filename : `${filename}.json`;
+        const filePath = path.join(VECTOR_STORAGE_DIR, safeFilename);
+
+        // Delete all previous .json files in vector_storage
+        const files = await fs.readdir(VECTOR_STORAGE_DIR);
+        const jsonFiles = files.filter(file => file.endsWith('.json'));
+        for (const oldFile of jsonFiles) {
+            const oldFilePath = path.join(VECTOR_STORAGE_DIR, oldFile);
+            try {
+                await fs.unlink(oldFilePath);
+            } catch (err) {
+                console.warn(`Warning: Failed to delete old vector db file ${oldFile}:`, err.message);
+            }
+        }
+
+        // Write the new data to file
+        await fs.writeFile(filePath, JSON.stringify(data, null, 2));
+
+        console.log(`💾 Saved vector database: ${safeFilename}`);
+        res.json({
+            success: true,
+            location: filePath,
+            filename: safeFilename
+        });
+    } catch (error) {
+        console.error('Error saving vector database:', error);
+        res.status(500).json({ error: 'Failed to save vector database' });
+    }
+}
+);
+
+// List vector database files
+app.get('/api/vector-storage/list', async (req, res) => {
+    try {
+        await ensureVectorStorageDir();
+        
+        const files = await fs.readdir(VECTOR_STORAGE_DIR);
+        const jsonFiles = files.filter(file => file.endsWith('.json'));
+        
+        const fileList = await Promise.all(
+            jsonFiles.map(async (filename) => {
+                const filePath = path.join(VECTOR_STORAGE_DIR, filename);
+                const stats = await fs.stat(filePath);
+                return {
+                    filename,
+                    size: stats.size,
+                    modified: stats.mtime.toISOString(),
+                    created: stats.birthtime.toISOString()
+                };
+            })
+        );
+        
+        // Sort by modification date (newest first)
+        fileList.sort((a, b) => new Date(b.modified) - new Date(a.modified));
+        
+        res.json(fileList);
+    } catch (error) {
+        console.error('Error listing vector databases:', error);
+        res.status(500).json({ error: 'Failed to list vector databases' });
+    }
+});
+
+// Load vector database from project folder
+app.get('/api/vector-storage/load/:filename', async (req, res) => {
+    try {
+        const { filename } = req.params;
+        const filePath = path.join(VECTOR_STORAGE_DIR, filename);
+        
+        // Check if file exists
+        await fs.access(filePath);
+        
+        // Read and parse the file
+        const fileContent = await fs.readFile(filePath, 'utf8');
+        const data = JSON.parse(fileContent);
+        
+        console.log(`📖 Loaded vector database: ${filename}`);
+        res.json(data);
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            res.status(404).json({ error: 'Vector database file not found' });
+        } else {
+            console.error('Error loading vector database:', error);
+            res.status(500).json({ error: 'Failed to load vector database' });
+        }
+    }
+});
+
+// Delete vector database file
+app.delete('/api/vector-storage/delete/:filename', async (req, res) => {
+    try {
+        const { filename } = req.params;
+        const filePath = path.join(VECTOR_STORAGE_DIR, filename);
+        
+        // Check if file exists
+        await fs.access(filePath);
+        
+        // Delete the file
+        await fs.unlink(filePath);
+        
+        console.log(`🗑️ Deleted vector database: ${filename}`);
+        res.json({ success: true, message: 'Vector database deleted' });
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            res.status(404).json({ error: 'Vector database file not found' });
+        } else {
+            console.error('Error deleting vector database:', error);
+            res.status(500).json({ error: 'Failed to delete vector database' });
+        }
     }
 });
 

@@ -1,0 +1,4 @@
+node_modules/
+sessions/backup-*.json
+vector_storage/
+.DS_Store

@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ollama Web UI</title>
+    <title>Ollama Web UI + RAG</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="rag-styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <!-- KaTeX for math rendering -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
@@ -14,19 +15,26 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <!-- Chat storage module -->
     <script src="chat-storage.js"></script>
+    <!-- PDF processor module -->
+    <script src="pdf-processor.js"></script>
+    <!-- RAG processor module -->
+    <script src="rag-processor.js"></script>
 </head>
 <body>
     <div class="container">
         <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <h1><i class="fas fa-robot"></i> Ollama Web UI</h1>
+                <h1><i class="fas fa-robot"></i> Ollama Web UI + RAG</h1>
                 <div class="header-buttons">
                     <button class="new-chat-btn" onclick="startNewChat()" title="Start a new chat">
                         <i class="fas fa-plus"></i>
                     </button>
                     <button class="history-btn" onclick="toggleHistory()" title="Chat history">
                         <i class="fas fa-history"></i>
+                    </button>
+                    <button class="rag-btn" onclick="toggleRAGPanel()" title="RAG Documents">
+                        <i class="fas fa-database"></i>
                     </button>
                     <button class="header-save-btn" onclick="saveChatToRTF()" title="Save conversation to RTF">
                         <i class="fas fa-download"></i>
@@ -109,6 +117,143 @@
             </div>
         </div>
 
+        <!-- RAG Panel -->
+        <div class="rag-panel" id="ragPanel">
+            <div class="rag-header">
+                <h2><i class="fas fa-database"></i> RAG Documents</h2>
+                <p>Upload and manage documents for enhanced AI responses</p>
+            </div>
+            
+            <div class="rag-content">
+                <!-- RAG Settings -->
+                <div class="rag-settings">
+                    <h3><i class="fas fa-cog"></i> Processing Settings</h3>
+                    <div class="setting-group">
+                        <label for="ragChunkSize">Chunk Size:</label>
+                        <input type="number" id="ragChunkSize" value="1000" min="100" max="4000" step="100">
+                    </div>
+                    <div class="setting-group">
+                        <label for="ragChunkOverlap">Chunk Overlap:</label>
+                        <input type="number" id="ragChunkOverlap" value="200" min="0" max="500" step="50">
+                    </div>
+                    <div class="setting-group">
+                        <label for="ragEmbeddingModel">Embedding Model:</label>
+                        <select id="ragEmbeddingModel">
+                            <option value="nomic-embed-text">nomic-embed-text</option>
+                            <option value="mxbai-embed-large">mxbai-embed-large</option>
+                            <option value="all-minilm">all-minilm</option>
+                        </select>
+                    </div>
+                    <button class="config-btn" onclick="updateRAGSettings()">
+                        <i class="fas fa-save"></i> Update Settings
+                    </button>
+                </div>
+
+                <!-- Vector Database Management -->
+                <div class="vector-db-management">
+                    <h3><i class="fas fa-database"></i> Vector Database</h3>
+                    <div class="db-actions">
+                        <button class="config-btn save-db-btn" onclick="saveVectorDatabase()" title="Save vector database to file">
+                            <i class="fas fa-download"></i> Export DB
+                        </button>
+                        <button class="config-btn load-db-btn" onclick="loadVectorDatabase()" title="Load vector database from file">
+                            <i class="fas fa-upload"></i> Import DB
+                        </button>
+                        <button class="config-btn load-project-db-btn" onclick="loadProjectVectorDatabase()" title="Load vector database from project folder">
+                            <i class="fas fa-folder-open"></i> Load from Project
+                        </button>
+                        <button class="config-btn clear-db-btn" onclick="clearVectorDatabase()" title="Clear all vector data from project folder">
+                            <i class="fas fa-trash"></i> Clear DB
+                        </button>
+                    </div>
+                    <input type="file" id="vectorDbFileInput" accept=".json" style="display: none;">
+                    
+                    <!-- Project Files Browser -->
+                    <div class="project-files-browser" id="projectFilesBrowser" style="display: none;">
+                        <h4>Select Vector Database File:</h4>
+                        <div class="project-files-list" id="projectFilesList">
+                            <div class="loading">Loading files...</div>
+                        </div>
+                        <div class="browser-actions">
+                            <button class="config-btn cancel-btn" onclick="hideProjectFilesBrowser()">Cancel</button>
+                        </div>
+                    </div>
+                    
+                    <small class="form-help">Vector database is automatically saved to project folder. Can be exported/imported as files.</small>
+                </div>
+
+                <!-- File Upload Area -->
+                <div class="rag-upload-area" id="ragUploadArea" onclick="document.getElementById('ragFileInput').click()">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>Click or drag files here to upload</p>
+                    <div class="supported-formats">
+                        Supports: PDF, CSV, JSON, TXT (support Chinese)
+                    </div>
+                </div>
+                <input type="file" id="ragFileInput" multiple accept=".pdf,.csv,.json,.txt,.text" style="display: none;">
+
+                <!-- Selected Files Display -->
+                <div class="selected-files" id="selectedFiles" style="display: none;">
+                    <h4><i class="fas fa-file-alt"></i> Selected Files</h4>
+                    <div class="file-list" id="selectedFilesList"></div>
+                    <div class="upload-actions">
+                        <button class="config-btn upload-btn" id="uploadBtn" onclick="processSelectedFiles()">
+                            <i class="fas fa-upload"></i> Process Files
+                        </button>
+                        <button class="config-btn cancel-btn" onclick="clearSelectedFiles()">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Processing Status -->
+                <div id="ragProcessingStatus" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="ragProgressFill"></div>
+                    </div>
+                    <div class="processing-status">Processing documents...</div>
+                </div>
+
+                <!-- Document List -->
+                <div class="document-list" id="ragDocumentList">
+                    <div class="empty-documents">
+                        <i class="fas fa-file-alt"></i>
+                        <h3>No documents uploaded</h3>
+                        <p>Upload documents to enable RAG-enhanced conversations. Your documents will be processed into searchable chunks.</p>
+                    </div>
+                </div>
+
+                <!-- RAG Stats -->
+                <div class="rag-stats" id="ragStats" style="display: none;">
+                    <h3><i class="fas fa-chart-bar"></i> Statistics</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-value" id="statDocuments">0</span>
+                            <span class="stat-label">Documents</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="statChunks">0</span>
+                            <span class="stat-label">Chunks</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="statEmbeddings">0</span>
+                            <span class="stat-label">Embeddings</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="statChunkSize">1000</span>
+                            <span class="stat-label">Chunk Size</span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 15px;">
+                        <button class="config-btn" onclick="clearAllRAGDocuments()" style="width: 100%;">
+                            <i class="fas fa-trash"></i> Clear All Documents
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
         <!-- Chat History Panel -->
         <div class="history-panel" id="historyPanel">
             <div class="history-content">
@@ -147,7 +292,7 @@
             <div class="chat-container" id="chatContainer">
                 <div class="welcome-message">
                     <i class="fas fa-comments"></i>
-                    <h2>Welcome to Ollama Web UI</h2>
+                    <h2>Welcome to Ollama Web UI + RAG</h2>
                     <p>Configure your server settings and select a model to start chatting</p>
                 </div>
             </div>

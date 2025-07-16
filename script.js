@@ -1,3 +1,16 @@
+// Close RAG panel when clicking outside of it or on chat area
+document.addEventListener('click', function(event) {
+    const ragPanel = document.getElementById('ragPanel');
+    const ragToggle = document.querySelector('.rag-btn');
+    if (!ragPanel || !ragPanel.classList.contains('active')) return;
+
+    // If click is inside the RAG panel or on the RAG toggle button, do nothing
+    if (ragPanel.contains(event.target) || (ragToggle && ragToggle.contains(event.target))) return;
+
+    // Otherwise, close the RAG panel
+    ragPanel.classList.remove('active');
+    if (ragToggle) ragToggle.classList.remove('active');
+});
 // Global variables
 let currentModel = '';
 let serverUrl = 'http://192.168.68.30:11434';
@@ -13,6 +26,10 @@ let autoSaveEnabled = true;
 
 // Chat storage instance
 let chatStorage = null;
+
+// RAG processor instance
+let ragProcessor = null;
+let ragMode = false;
 
 // Backend server URL
 const BACKEND_URL = 'http://localhost:3001';
@@ -109,6 +126,33 @@ async function initializeApp() {
         chatStorage = new ChatStorage();
         console.log('Chat storage initialized');
     }
+    
+    // Initialize RAG processor
+    if (typeof RAGProcessor !== 'undefined') {
+        ragProcessor = new RAGProcessor();
+        console.log('RAG processor initialized');
+        
+        // Wait for vector database to load from project folder
+        try {
+            await ragProcessor.loadFromStorage();
+            console.log('Vector database loading completed');
+            
+            // Update UI if documents were loaded
+            const stats = ragProcessor.getStats();
+            if (stats.totalDocuments > 0) {
+                updateRAGDocumentList();
+                updateRAGStats();
+                console.log(`Loaded ${stats.totalDocuments} documents from project folder`);
+            }
+        } catch (error) {
+            console.log('Vector database loading failed:', error);
+        }
+        
+        setupRAGEventListeners();
+    }
+    
+    // Ensure RAG panel is hidden on startup
+    initializeRAGPanel();
     
     // Load saved settings from backend first, fallback to localStorage
     await loadConfigurationOnStartup();
@@ -445,6 +489,36 @@ function setupEventListeners() {
     document.addEventListener('click', handleCodeBlockCopy);
 }
 
+// RAG-specific event listeners
+function setupRAGEventListeners() {
+    // File input for RAG documents
+    const ragFileInput = document.getElementById('ragFileInput');
+    if (ragFileInput) {
+        ragFileInput.addEventListener('change', handleRAGFileUpload);
+    }
+    
+    // Drag and drop for RAG upload area
+    const ragUploadArea = document.getElementById('ragUploadArea');
+    if (ragUploadArea) {
+        ragUploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            ragUploadArea.classList.add('dragover');
+        });
+        
+        ragUploadArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            ragUploadArea.classList.remove('dragover');
+        });
+        
+        ragUploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            ragUploadArea.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files);
+            handleRAGFiles(files);
+        });
+    }
+}
+
 function autoResizeTextarea() {
     const textarea = document.getElementById('messageInput');
     textarea.addEventListener('input', function() {
@@ -678,6 +752,31 @@ async function streamResponse(message, files) {
         contextPrompt += `System: ${systemPrompt.trim()}\n\n`;
     }
     
+    // RAG Enhancement: Search for relevant document chunks
+    let ragContext = '';
+    if (ragProcessor && ragProcessor.getStats().totalDocuments > 0) {
+        console.log('Searching RAG documents for relevant context...');
+        try {
+            const relevantChunks = await ragProcessor.searchRelevantChunks(message, 5);
+            if (relevantChunks.length > 0) {
+                ragContext += '\n--- DOCUMENT CONTEXT ---\n';
+                ragContext += 'You are provided with context chunks from documents. When using information from these, cite the document name in square brackets, e.g., [filename.txt]. If you use information from multiple documents, cite all relevant sources.\n';
+                relevantChunks.forEach((result, index) => {
+                    ragContext += `\n[${result.fileName}]\n`;
+                    ragContext += `Similarity: ${(result.similarity * 100).toFixed(1)}%\n`;
+                    ragContext += `Content: ${result.chunk.content}\n`;
+                    ragContext += '---\n';
+                });
+                ragContext += '\nAlways cite the document name(s) in your answer when using information from the context above.\n\n';
+                // Show context preview in UI
+                showRAGContext(relevantChunks);
+                console.log(`Found ${relevantChunks.length} relevant chunks for RAG enhancement`);
+            }
+        } catch (error) {
+            console.error('Error searching RAG documents:', error);
+        }
+    }
+    
     // Build conversation history (excluding the current message we just added)
     if (previousMessages.length > 1) {
         // Get all messages except the last one (which is the current user message)
@@ -698,6 +797,11 @@ async function streamResponse(message, files) {
                 contextPrompt += `Assistant: ${plainText}\n\n`;
             }
         });
+    }
+    
+    // Add RAG context before the current user message
+    if (ragContext) {
+        contextPrompt += ragContext;
     }
     
     // Add current user message
@@ -1110,17 +1214,21 @@ async function clearAllSessions() {
 function updateCurrentSessionInfo() {
     const infoElement = document.getElementById('currentSessionInfo');
     if (infoElement) {
+        const ragIndicator = ragProcessor && ragProcessor.getStats().totalDocuments > 0 
+            ? ' <span class="rag-mode-indicator"><i class="fas fa-database"></i> RAG</span>' 
+            : '';
+        
         if (currentSessionId && sessions[currentSessionId]) {
             const session = sessions[currentSessionId];
             const systemPromptIndicator = systemPrompt && systemPrompt.trim() 
                 ? ' <i class="fas fa-brain" title="System prompt active"></i>' 
                 : '';
-            infoElement.innerHTML = `<span class="session-status">Active: "${session.title}" (${session.messages.length} messages)${systemPromptIndicator}</span>`;
+            infoElement.innerHTML = `<span class="session-status">Active: "${session.title}" (${session.messages.length} messages)${systemPromptIndicator}${ragIndicator}</span>`;
         } else {
             const systemPromptIndicator = systemPrompt && systemPrompt.trim() 
                 ? ' <i class="fas fa-brain" title="System prompt active"></i>' 
                 : '';
-            infoElement.innerHTML = `<span class="session-status">No active session${systemPromptIndicator}</span>`;
+            infoElement.innerHTML = `<span class="session-status">No active session${systemPromptIndicator}${ragIndicator}</span>`;
         }
     }
 }
@@ -2304,5 +2412,681 @@ function updateStorageInfo() {
                 <span>No chat sessions saved</span>
             </div>
         `;
+    }
+}
+
+// ===== RAG FUNCTIONALITY =====
+
+// Initialize RAG panel to hidden state
+function initializeRAGPanel() {
+    const ragPanel = document.getElementById('ragPanel');
+    const ragToggle = document.getElementById('ragToggle');
+    
+    if (ragPanel) {
+        ragPanel.classList.remove('active');
+    }
+    if (ragToggle) {
+        ragToggle.classList.remove('active');
+    }
+    
+    console.log('RAG panel initialized to hidden state');
+}
+
+// Toggle RAG panel
+function toggleRAGPanel() {
+    const ragPanel = document.getElementById('ragPanel');
+    if (ragPanel) {
+        ragPanel.classList.toggle('active');
+
+        // Close other panels
+        const settingsPanel = document.getElementById('settingsPanel');
+        const historyPanel = document.getElementById('historyPanel');
+        if (ragPanel.classList.contains('active')) {
+            settingsPanel?.classList.remove('active');
+            historyPanel?.classList.remove('active');
+        }
+
+        // Update stats when opening
+        if (ragPanel.classList.contains('active')) {
+            updateRAGStats();
+        }
+    }
+}
+
+// Handle RAG file upload via input
+function handleRAGFileUpload(event) {
+    const files = Array.from(event.target.files);
+    if (files.length > 0) {
+        showSelectedFiles(files);
+    }
+    // Clear the input for future uploads
+    event.target.value = '';
+}
+
+// Show selected files with submit button
+function showSelectedFiles(files) {
+    const selectedFilesDiv = document.getElementById('selectedFiles');
+    const filesList = document.getElementById('selectedFilesList');
+    
+    // Clear previous files
+    filesList.innerHTML = '';
+    
+    // Store files globally for processing
+    window.selectedRAGFiles = files;
+    
+    // Display each file
+    files.forEach((file, index) => {
+        const fileItem = document.createElement('div');
+        fileItem.className = 'file-item';
+        
+        const fileInfo = document.createElement('div');
+        fileInfo.className = 'file-info';
+        
+        const icon = getFileIcon(file.name);
+        const fileName = file.name.length > 30 ? file.name.substring(0, 30) + '...' : file.name;
+        const fileSize = formatFileSize(file.size);
+        
+        fileInfo.innerHTML = `
+            <i class="fas ${icon}"></i>
+            <span class="file-name">${fileName}</span>
+            <span class="file-size">${fileSize}</span>
+        `;
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-file';
+        removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+        removeBtn.onclick = () => removeSelectedFile(index);
+        
+        fileItem.appendChild(fileInfo);
+        fileItem.appendChild(removeBtn);
+        filesList.appendChild(fileItem);
+    });
+    
+    selectedFilesDiv.style.display = 'block';
+}
+
+// Get appropriate icon for file type
+function getFileIcon(filename) {
+    const ext = filename.toLowerCase().split('.').pop();
+    switch (ext) {
+        case 'pdf': return 'fa-file-pdf';
+        case 'csv': return 'fa-file-csv';
+        case 'json': return 'fa-file-code';
+        case 'txt': case 'text': return 'fa-file-alt';
+        default: return 'fa-file';
+    }
+}
+
+// Format file size
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Remove a selected file
+function removeSelectedFile(index) {
+    window.selectedRAGFiles.splice(index, 1);
+    if (window.selectedRAGFiles.length === 0) {
+        clearSelectedFiles();
+    } else {
+        showSelectedFiles(window.selectedRAGFiles);
+    }
+}
+
+// Clear all selected files
+function clearSelectedFiles() {
+    const selectedFilesDiv = document.getElementById('selectedFiles');
+    selectedFilesDiv.style.display = 'none';
+    window.selectedRAGFiles = [];
+}
+
+// Process selected files (called by submit button)
+function processSelectedFiles() {
+    if (window.selectedRAGFiles && window.selectedRAGFiles.length > 0) {
+        handleRAGFiles(window.selectedRAGFiles);
+        clearSelectedFiles();
+    }
+}
+
+// Process RAG files
+async function handleRAGFiles(files) {
+    if (!ragProcessor) {
+        showNotification('RAG processor not initialized', 'error');
+        return;
+    }
+    
+    if (files.length === 0) return;
+    
+    // Show processing status
+    const statusElement = document.getElementById('ragProcessingStatus');
+    const progressFill = document.getElementById('ragProgressFill');
+    const processingStatus = statusElement.querySelector('.processing-status');
+    
+    statusElement.style.display = 'block';
+    progressFill.style.width = '0%';
+    processingStatus.textContent = 'Processing documents...';
+    processingStatus.className = 'processing-status processing';
+    
+    let processed = 0;
+    const results = [];
+    
+    try {
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            processingStatus.textContent = `Processing ${file.name}...`;
+            const result = await ragProcessor.processFile(file);
+            results.push(result);
+            processed++;
+            const progress = (processed / files.length) * 100;
+            progressFill.style.width = `${progress}%`;
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        // Save vector database to project folder
+        processingStatus.textContent = 'Saving vector database...';
+        try {
+            const saveResult = await ragProcessor.saveToStorage();
+            if (!saveResult || !saveResult.success) {
+                showNotification('Failed to save vector database to project folder', 'error');
+                console.error('Vector DB save error:', saveResult && saveResult.error);
+            } else {
+                showNotification('Vector database saved to project folder', 'success');
+            }
+        } catch (saveError) {
+            showNotification('Error saving vector database: ' + saveError.message, 'error');
+            console.error('Vector DB save error:', saveError);
+        }
+
+        // Show completion
+        processingStatus.textContent = 'Processing complete!';
+        processingStatus.className = 'processing-status success';
+        setTimeout(() => {
+            statusElement.style.display = 'none';
+        }, 2000);
+
+        // Update document list and stats
+        updateRAGDocumentList();
+        updateRAGStats();
+
+        // Show summary
+        const successCount = results.filter(r => r.success).length;
+        const errorCount = results.filter(r => !r.success).length;
+        if (successCount > 0) {
+            showNotification(`Successfully processed ${successCount} document(s)${errorCount > 0 ? `, ${errorCount} failed` : ''}`, 'success');
+        }
+        if (errorCount > 0) {
+            const errorFiles = results.filter(r => !r.success).map(r => r.name).join(', ');
+            showNotification(`Failed to process: ${errorFiles}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error processing RAG files:', error);
+        processingStatus.textContent = 'Processing failed!';
+        processingStatus.className = 'processing-status error';
+        showNotification('Error processing documents: ' + error.message, 'error');
+        setTimeout(() => {
+            statusElement.style.display = 'none';
+        }, 3000);
+    }
+}
+
+// Update RAG document list display
+function updateRAGDocumentList() {
+    const documentList = document.getElementById('ragDocumentList');
+    if (!documentList || !ragProcessor) return;
+    
+    const documents = ragProcessor.getDocuments();
+    
+    if (documents.length === 0) {
+        documentList.innerHTML = `
+            <div class="empty-documents">
+                <i class="fas fa-file-alt"></i>
+                <h3>No documents uploaded</h3>
+                <p>Upload documents to enable RAG-enhanced conversations. Your documents will be processed into searchable chunks.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    documents.forEach(doc => {
+        const chunks = ragProcessor.chunks.get(doc.id);
+        const chunkCount = chunks ? chunks.length : 0;
+        const uploadDate = new Date(doc.uploadedAt).toLocaleDateString();
+        
+        html += `
+            <div class="document-item">
+                <div class="document-info">
+                    <div class="document-name" title="${doc.name}">${doc.name}</div>
+                    <div class="document-meta">
+                        ${doc.type.toUpperCase()} • ${chunkCount} chunks • ${uploadDate}
+                    </div>
+                </div>
+                <div class="document-actions">
+                    <button onclick="previewRAGDocument('${doc.id}')" title="Preview chunks">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button onclick="removeRAGDocument('${doc.id}')" title="Remove document" class="delete-btn">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    
+    documentList.innerHTML = html;
+}
+
+// Update RAG statistics
+function updateRAGStats() {
+    if (!ragProcessor) return;
+    
+    const stats = ragProcessor.getStats();
+    const statsElement = document.getElementById('ragStats');
+    
+    if (stats.totalDocuments > 0) {
+        statsElement.style.display = 'block';
+        
+        document.getElementById('statDocuments').textContent = stats.totalDocuments;
+        document.getElementById('statChunks').textContent = stats.totalChunks;
+        document.getElementById('statEmbeddings').textContent = stats.totalEmbeddings;
+        document.getElementById('statChunkSize').textContent = stats.chunkSize;
+    } else {
+        statsElement.style.display = 'none';
+    }
+}
+
+// Update RAG settings
+function updateRAGSettings() {
+    if (!ragProcessor) return;
+    
+    const chunkSize = parseInt(document.getElementById('ragChunkSize').value);
+    const chunkOverlap = parseInt(document.getElementById('ragChunkOverlap').value);
+    const embeddingModel = document.getElementById('ragEmbeddingModel').value;
+    
+    ragProcessor.updateSettings({
+        chunkSize: chunkSize,
+        chunkOverlap: chunkOverlap,
+        embeddingModel: embeddingModel
+    });
+    
+    updateRAGStats();
+    showNotification('RAG settings updated', 'success');
+}
+
+// Remove RAG document
+function removeRAGDocument(fileId) {
+    if (!ragProcessor) return;
+    
+    const doc = ragProcessor.documents.get(fileId);
+    if (!doc) return;
+    
+    const confirmed = confirm(`Remove document "${doc.name}"? This cannot be undone.`);
+    if (!confirmed) return;
+    
+    ragProcessor.removeDocument(fileId);
+    updateRAGDocumentList();
+    updateRAGStats();
+    
+    showNotification(`Removed document: ${doc.name}`, 'success');
+}
+
+// Clear all RAG documents
+function clearAllRAGDocuments() {
+    if (!ragProcessor) return;
+    
+    const stats = ragProcessor.getStats();
+    if (stats.totalDocuments === 0) {
+        showNotification('No documents to clear', 'info');
+        return;
+    }
+    
+    const confirmed = confirm(`Remove all ${stats.totalDocuments} documents? This cannot be undone.`);
+    if (!confirmed) return;
+    
+    ragProcessor.clearAll();
+    updateRAGDocumentList();
+    updateRAGStats();
+    
+    showNotification('All documents cleared', 'success');
+}
+
+// Vector Database Management Functions
+
+// Save vector database to file
+async function saveVectorDatabase() {
+    if (!ragProcessor) {
+        showNotification('RAG processor not initialized', 'error');
+        return;
+    }
+    
+    const stats = ragProcessor.getStats();
+    if (stats.totalDocuments === 0) {
+        showNotification('No documents to save', 'info');
+        return;
+    }
+    
+    try {
+        const success = await ragProcessor.saveToStorage();
+        if (success) {
+            showNotification(`Vector database exported (${stats.totalDocuments} documents, ${stats.totalChunks} chunks)`, 'success');
+        } else {
+            showNotification('Failed to export vector database', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving vector database:', error);
+        showNotification('Error exporting vector database', 'error');
+    }
+}
+
+// Load vector database from file
+function loadVectorDatabase() {
+    if (!ragProcessor) {
+        showNotification('RAG processor not initialized', 'error');
+        return;
+    }
+    
+    const fileInput = document.getElementById('vectorDbFileInput');
+    fileInput.onchange = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        try {
+            showNotification('Loading vector database...', 'info');
+            const success = await ragProcessor.loadFromFile(file);
+            
+            if (success) {
+                updateRAGDocumentList();
+                updateRAGStats();
+                const stats = ragProcessor.getStats();
+                showNotification(`Vector database loaded (${stats.totalDocuments} documents, ${stats.totalChunks} chunks)`, 'success');
+            } else {
+                showNotification('Failed to load vector database', 'error');
+            }
+        } catch (error) {
+            console.error('Error loading vector database:', error);
+            showNotification('Error loading vector database', 'error');
+        }
+        
+        // Clear input for future uploads
+        event.target.value = '';
+    };
+    
+    fileInput.click();
+}
+
+// Clear vector database
+async function clearVectorDatabase() {
+    if (!ragProcessor) return;
+    
+    const stats = ragProcessor.getStats();
+    if (stats.totalDocuments === 0) {
+        showNotification('No vector data to clear', 'info');
+        return;
+    }
+    
+    const confirmed = confirm(`Clear all vector database data? This will remove ${stats.totalDocuments} documents and ${stats.totalChunks} chunks from the project folder. This cannot be undone.`);
+    if (!confirmed) return;
+    
+    try {
+        showNotification('Clearing vector database...', 'info');
+        ragProcessor.clearAll();
+        await ragProcessor.clearStorage();
+        updateRAGDocumentList();
+        updateRAGStats();
+        
+        showNotification('Vector database cleared from project folder', 'success');
+    } catch (error) {
+        console.error('Error clearing vector database:', error);
+        showNotification('Error clearing vector database', 'error');
+    }
+}
+
+// Preview RAG document chunks
+function previewRAGDocument(fileId) {
+    if (!ragProcessor) return;
+    
+    const doc = ragProcessor.documents.get(fileId);
+    const chunks = ragProcessor.chunks.get(fileId);
+    
+    if (!doc || !chunks) return;
+    
+    // Create a simple modal preview (you can enhance this)
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.8);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    `;
+    
+    const content = document.createElement('div');
+    content.style.cssText = `
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        max-width: 800px;
+        max-height: 80%;
+        overflow-y: auto;
+        position: relative;
+    `;
+    
+    let html = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2>${doc.name}</h2>
+            <button onclick="this.closest('.modal').remove()" style="background: none; border: none; font-size: 1.5em; cursor: pointer;">&times;</button>
+        </div>
+        <p><strong>Type:</strong> ${doc.type.toUpperCase()} | <strong>Chunks:</strong> ${chunks.length}</p>
+        <hr>
+    `;
+    
+    chunks.forEach((chunk, index) => {
+        html += `
+            <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; margin-bottom: 15px;">
+                <div style="color: #666; font-size: 0.9em; margin-bottom: 10px;">
+                    <strong>Chunk ${index + 1}</strong> (${chunk.length} chars)
+                </div>
+                <div style="max-height: 300px; overflow-y: auto; line-height: 1.4;">
+                    ${chunk.content}
+                </div>
+            </div>
+        `;
+    });
+    
+    content.innerHTML = html;
+    modal.appendChild(content);
+    modal.className = 'modal';
+    document.body.appendChild(modal);
+    
+    // Close on background click
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+}
+
+// Show RAG context in chat interface
+function showRAGContext(relevantChunks) {
+    const chatContainer = document.getElementById('chatContainer');
+    if (!chatContainer || relevantChunks.length === 0) return;
+    
+    // Remove any existing context preview
+    const existingPreview = chatContainer.querySelector('.context-preview');
+    if (existingPreview) {
+        existingPreview.remove();
+    }
+    
+    // Create context preview element
+    const contextPreview = document.createElement('div');
+    contextPreview.className = 'context-preview';
+    
+    let html = `
+        <h4><i class="fas fa-search"></i> Retrieved Context (${relevantChunks.length} chunks)</h4>
+        <div class="context-chunks">
+    `;
+    
+    relevantChunks.forEach((result, index) => {
+        const similarity = (result.similarity * 100).toFixed(1);
+        const preview = result.chunk.content.length > 200 
+            ? result.chunk.content.substring(0, 200) + '...' 
+            : result.chunk.content;
+            
+        html += `
+            <div class="context-chunk">
+                ${preview}
+                <div class="chunk-source">
+                    📄 ${result.fileName} • Similarity: ${similarity}%
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    contextPreview.innerHTML = html;
+    
+    // Insert before the last message
+    const messages = chatContainer.querySelectorAll('.message');
+    if (messages.length > 0) {
+        const lastMessage = messages[messages.length - 1];
+        chatContainer.insertBefore(contextPreview, lastMessage);
+    } else {
+        chatContainer.appendChild(contextPreview);
+    }
+    
+    // Auto-scroll to show context
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+// Load vector database from project folder
+async function loadProjectVectorDatabase() {
+    try {
+        showNotification('Loading project files...', 'info');
+        
+        const response = await fetch('/api/vector-storage/list');
+        if (!response.ok) {
+            if (response.status === 404) {
+                showNotification('Project storage not available. Make sure the server is running.', 'warning');
+            } else {
+                throw new Error(`Failed to fetch project files: ${response.status}`);
+            }
+            return;
+        }
+        
+        const files = await response.json();
+        showProjectFilesBrowser(files);
+        
+    } catch (error) {
+        console.error('Error loading project files:', error);
+        showNotification('Error connecting to project storage', 'error');
+    }
+}
+
+// Show project files browser
+function showProjectFilesBrowser(files) {
+    const browser = document.getElementById('projectFilesBrowser');
+    const filesList = document.getElementById('projectFilesList');
+    
+    if (files.length === 0) {
+        filesList.innerHTML = '<div class="no-files">No vector database files found in project folder.</div>';
+    } else {
+        let html = '';
+        files.forEach(file => {
+            const sizeKB = (file.size / 1024).toFixed(1);
+            const modifiedDate = new Date(file.modified).toLocaleString();
+            
+            html += `
+                <div class="project-file-item" data-filename="${file.filename}">
+                    <div class="project-file-info">
+                        <div class="project-file-name">${file.filename}</div>
+                        <div class="project-file-meta">${sizeKB} KB • Modified: ${modifiedDate}</div>
+                    </div>
+                    <div class="project-file-actions">
+                        <button class="file-action-btn" onclick="loadProjectFile('${file.filename}')">Load</button>
+                        <button class="file-action-btn delete-btn" onclick="deleteProjectFile('${file.filename}')">Delete</button>
+                    </div>
+                </div>
+            `;
+        });
+        filesList.innerHTML = html;
+    }
+    
+    browser.style.display = 'block';
+}
+
+// Hide project files browser
+function hideProjectFilesBrowser() {
+    document.getElementById('projectFilesBrowser').style.display = 'none';
+}
+
+// Load specific file from project folder
+async function loadProjectFile(filename) {
+    try {
+        showNotification(`Loading ${filename}...`, 'info');
+        
+        const response = await fetch(`/api/vector-storage/load/${filename}`);
+        if (!response.ok) {
+            throw new Error(`Failed to load file: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!ragProcessor) {
+            showNotification('RAG processor not initialized', 'error');
+            return;
+        }
+        
+        // Load the data into RAG processor
+        const success = await ragProcessor.loadFromData(data);
+        
+        if (success) {
+            updateRAGDocumentList();
+            updateRAGStats();
+            const stats = ragProcessor.getStats();
+            showNotification(`Loaded ${filename} (${stats.totalDocuments} documents, ${stats.totalChunks} chunks)`, 'success');
+            hideProjectFilesBrowser();
+        } else {
+            showNotification('Failed to load vector database', 'error');
+        }
+        
+    } catch (error) {
+        console.error('Error loading project file:', error);
+        showNotification(`Error loading ${filename}`, 'error');
+    }
+}
+
+// Delete file from project folder
+async function deleteProjectFile(filename) {
+    const confirmed = confirm(`Delete "${filename}" from project folder? This cannot be undone.`);
+    if (!confirmed) return;
+    
+    try {
+        showNotification(`Deleting ${filename}...`, 'info');
+        
+        const response = await fetch(`/api/vector-storage/delete/${filename}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to delete file: ${response.status}`);
+        }
+        
+        showNotification(`Deleted ${filename}`, 'success');
+        
+        // Refresh the file list
+        loadProjectVectorDatabase();
+        
+    } catch (error) {
+        console.error('Error deleting project file:', error);
+        showNotification(`Error deleting ${filename}`, 'error');
     }
 }

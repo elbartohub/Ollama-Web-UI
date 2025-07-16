@@ -5,11 +5,16 @@
     box-sizing: border-box;
 }
 
+html {
+    overflow-x: hidden; /* Prevent horizontal scroll on html */
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
     color: #333;
+    overflow-x: hidden; /* Prevent horizontal scroll */
 }
 
 .container {
@@ -21,6 +26,8 @@ body {
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);
     box-shadow: 0 0 30px rgba(0, 0, 0, 0.1);
+    position: relative;
+    width: 100%;
 }
 
 /* Header Styles */
@@ -43,12 +50,29 @@ body {
     align-items: center;
 }
 
+
 .header-save-btn,
 .new-chat-btn,
 .history-btn,
 .settings-btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
+    background: rgba(40, 167, 69, 0.3);
+    border: 2px solid rgba(40, 167, 69, 0.5);
+    color: white;
+    padding: 1rem;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 1.4rem;
+    width: 3.5rem;
+    height: 3.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.rag-btn {
+    background: rgba(40, 167, 69, 0.3);
+    border: 2px solid rgba(40, 167, 69, 0.5);
     color: white;
     padding: 1rem;
     border-radius: 50%;

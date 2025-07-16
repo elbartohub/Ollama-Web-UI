@@ -1,6 +1,6 @@
 {
   "serverUrl": "http://192.168.68.30:11434",
-  "model": "qwen2.5-coder:14b",
-  "systemPrompt": "你是一個AI助手。請用繁體中文回答。",
-  "lastUpdated": "2025-07-05T22:42:44.018Z"
+  "model": "gemma:latest",
+  "systemPrompt": "你是保建專家建議，建議高壓氧治療的時間、次數、高壓氧量。高壓氧的大氣壓不要超過 1.5。如果用戶提供保健以外資訊，要求用戶更正。直接由'症狀分析'，不用解析 System Prompt 如何運作",
+  "lastUpdated": "2025-07-16T14:24:59.681Z"
 }

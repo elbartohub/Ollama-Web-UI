@@ -1,6 +1,0 @@
-{
-  "serverUrl": "http://192.168.68.30:11434",
-  "model": "gemma:latest",
-  "systemPrompt": "你是AI 助手，請用繁體中文回覆一切！",
-  "lastUpdated": "2025-07-16T17:16:59.582Z"
-}

@@ -70,7 +70,6 @@ A modern, responsive web interface for interacting with Ollama models. This web 
 - **🌅 Clean Interface**: Distraction-free design with contextual panel management
 - **📱 Mobile-Friendly**: Responsive design that works across all device sizes
 
-![Screenshot 2025-07-06 at 7 19 35 AM](https://github.com/user-attachments/assets/c277de37-578a-48ae-8bf1-8dbb1c56f74b)
 ![Screenshot 2025-07-06 at 7 23 43 AM](https://github.com/user-attachments/assets/cc81847f-d815-4490-b1cc-c03eb559df91)
 
 ## 📋 Requirements
